@@ -2,7 +2,7 @@
 buildscript {
     ext.versions = [
         dokka: '0.10.1',
-        conscrypt: '2.4.0'
+        conscrypt: '2.5.0'
     ]
 
     repositories {
