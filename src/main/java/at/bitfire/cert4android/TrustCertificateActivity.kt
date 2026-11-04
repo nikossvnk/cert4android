@@ -10,9 +10,8 @@ package at.bitfire.cert4android
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
 import androidx.appcompat.app.AppCompatActivity
-import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -25,7 +24,6 @@ import java.security.cert.X509Certificate
 import java.security.spec.MGF1ParameterSpec.SHA1
 import java.security.spec.MGF1ParameterSpec.SHA256
 import java.text.DateFormat
-import java.util.*
 import java.util.logging.Level
 import kotlin.concurrent.thread
 
@@ -40,34 +38,49 @@ class TrustCertificateActivity: AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        model = ViewModelProvider(this).get(Model::class.java)
+        model = ViewModelProvider(this)[Model::class.java]
         model.processIntent(intent)
 
-        val binding = DataBindingUtil.setContentView<ActivityTrustCertificateBinding>(this, R.layout.activity_trust_certificate)
-        binding.lifecycleOwner = this
-        binding.model = model
+        val binding = ActivityTrustCertificateBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        model.issuedFor.observe(this) { binding.issuedFor.text = it }
+        model.issuedBy.observe(this) { binding.issuedBy.text = it }
+        model.validity.observe(this) { (from, to) ->
+            binding.validity.text = getString(R.string.trust_certificate_validity_period_value, from.orEmpty(), to.orEmpty())
+        }
+        model.sha1.observe(this) { binding.sha1.text = it }
+        model.sha256.observe(this) { binding.sha256.text = it }
+        model.verifiedByUser.observe(this) { verified ->
+            if (binding.verifiedByUser.isChecked != verified)
+                binding.verifiedByUser.isChecked = verified
+            binding.accept.isEnabled = verified
+        }
+
+        binding.verifiedByUser.setOnCheckedChangeListener { _, isChecked ->
+            model.verifiedByUser.value = isChecked
+        }
+        binding.accept.setOnClickListener {
+            sendDecision(true)
+            finish()
+        }
+        binding.reject.setOnClickListener {
+            sendDecision(false)
+            finish()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         model.processIntent(intent)
-    }
-
-    fun acceptCertificate(view: View) {
-        sendDecision(true)
-        finish()
-    }
-
-    fun rejectCertificate(view: View) {
-        sendDecision(false)
-        finish()
     }
 
     private fun sendDecision(trusted: Boolean) {
         val intent = Intent(this, CustomCertService::class.java)
         with(intent) {
             action = CustomCertService.CMD_CERTIFICATION_DECISION
-            putExtra(CustomCertService.EXTRA_CERTIFICATE, getIntent().getSerializableExtra(EXTRA_CERTIFICATE))
+            putExtra(CustomCertService.EXTRA_CERTIFICATE, getIntent().getByteArrayExtra(EXTRA_CERTIFICATE))
             putExtra(CustomCertService.EXTRA_TRUSTED, trusted)
         }
         startService(intent)
@@ -85,11 +98,16 @@ class TrustCertificateActivity: AppCompatActivity() {
 
         val validFrom = MutableLiveData<String>()
         val validTo = MutableLiveData<String>()
+        /** pair of [validFrom] and [validTo] */
+        val validity = MediatorLiveData<Pair<String?, String?>>().apply {
+            addSource(validFrom) { value = it to validTo.value }
+            addSource(validTo) { value = validFrom.value to it }
+        }
 
         val sha1 = MutableLiveData<String>()
         val sha256 = MutableLiveData<String>()
 
-        val verifiedByUser = MutableLiveData<Boolean>()
+        val verifiedByUser = MutableLiveData(false)
 
         fun processIntent(intent: Intent?) {
             intent?.getByteArrayExtra(EXTRA_CERTIFICATE)?.let { raw ->
@@ -105,10 +123,10 @@ class TrustCertificateActivity: AppCompatActivity() {
                                     sb.append("[").append(altName[0]).append("]").append(name).append(" ")
                             }
                             sb.toString()
-                        } ?: /* use CN if alternative names are not available */ cert.subjectDN.name
+                        } ?: /* use CN if alternative names are not available */ cert.subjectX500Principal.name
                         issuedFor.postValue(subject)
 
-                        issuedBy.postValue(cert.issuerDN.toString())
+                        issuedBy.postValue(cert.issuerX500Principal.name)
 
                         val formatter = DateFormat.getDateInstance(DateFormat.LONG)
                         validFrom.postValue(formatter.format(cert.notBefore))
@@ -132,10 +150,8 @@ class TrustCertificateActivity: AppCompatActivity() {
                     e.message ?: "Couldn't create message digest"
                 }
 
-        private fun hexString(data: ByteArray): String {
-            val str = data.mapTo(LinkedList()) { String.format("%02x", it) }
-            return str.joinToString(":")
-        }
+        private fun hexString(data: ByteArray) =
+                data.joinToString(":") { "%02x".format(it) }
 
     }
 

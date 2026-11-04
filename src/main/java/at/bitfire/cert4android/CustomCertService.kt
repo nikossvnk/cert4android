@@ -8,13 +8,17 @@
 
 package at.bitfire.cert4android
 
+import android.Manifest
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import org.conscrypt.Conscrypt
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -156,7 +160,7 @@ class CustomCertService: Service() {
             untrustedCerts.remove(cert)
 
             try {
-                trustedKeyStore.setCertificateEntry(cert.subjectDN.name, cert)
+                trustedKeyStore.setCertificateEntry(cert.subjectX500Principal.name, cert)
                 saveKeyStore()
             } catch(e: KeyStoreException) {
                 Constants.log.log(Level.SEVERE, "Couldn't add certificate into key store", e)
@@ -242,13 +246,16 @@ class CustomCertService: Service() {
                                 .setSmallIcon(R.drawable.ic_lock_open_white)
                                 .setContentTitle(this@CustomCertService.getString(R.string.certificate_notification_connection_security))
                                 .setContentText(this@CustomCertService.getString(R.string.certificate_notification_user_interaction))
-                                .setSubText(cert.subjectDN.name)
+                                .setSubText(cert.subjectX500Principal.name)
                                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
                                 .setContentIntent(PendingIntent.getActivity(this@CustomCertService, id, decisionIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
                                 .setDeleteIntent(PendingIntent.getService(this@CustomCertService, id, rejectIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
                                 .build()
                         val nm = NotificationUtils.createChannels(this@CustomCertService)
-                        nm.notify(CertUtils.getTag(cert), Constants.NOTIFICATION_CERT_DECISION, notify)
+                        if (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this@CustomCertService, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+                            nm.notify(CertUtils.getTag(cert), Constants.NOTIFICATION_CERT_DECISION, notify)
+                        else
+                            Constants.log.warning("Not allowed to post notifications, can't show certificate notification")
 
                         if (foreground) {
                             decisionIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

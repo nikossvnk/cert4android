@@ -1,7 +1,3 @@
-
-[![build status](https://gitlab.com/bitfireAT/cert4android/badges/master/build.svg)](https://gitlab.com/bitfireAT/cert4android/commits/master)
-
-
 # cert4android
 
 cert4android is a library for Android to manage custom certificates which has
@@ -10,8 +6,6 @@ it in your own open-source app.
 
 _This software is not affiliated to, nor has it been authorized, sponsored or otherwise approved
 by Google LLC. Android is a trademark of Google LLC._
-
-Generated KDoc: https://bitfireat.gitlab.io/cert4android/dokka/cert4android/
 
 Discussion: https://forums.bitfire.at/category/18/libraries
 
@@ -26,7 +20,8 @@ Discussion: https://forums.bitfire.at/category/18/libraries
 # How to use
 
 1. Clone cert4android as a submodule.
-1. Add the submodule to `settings.gradle` / `app/build.gradle`.
+1. Add the submodule to `settings.gradle.kts` (`include(":cert4android")`) and add
+   `implementation(project(":cert4android"))` to `app/build.gradle.kts`.
 1. Create an instance of `CustomCertManager` (`Context` is required to connect to the
    `CustomCertService`, which manages the custom certificates).
 1. Use this instance as `X509TrustManager` in your calls (for instance, when setting up your HTTP client).
@@ -56,6 +51,22 @@ You can overwrite resources when you want, just have a look at the `res/strings`
 directory. Especially `certificate_notification_connection_security` and
 `trust_certificate_unknown_certificate_found` should contain your app name.
 
+
+## Development
+
+This fork is maintained at `github.com/nikossvnk/cert4android`. Use JDK 25,
+the included Gradle 9.8.2 wrapper, and Android SDK Platform 37.0. The module uses
+AGP 9.5.0, built-in Kotlin 2.4.21, Java 17 bytecode, and minSdk 23.
+Certificate dialogs use view binding; the AIDL service and trust-manager API remain.
+
+```sh
+./gradlew build compileDebugAndroidTestKotlin
+./gradlew connectedCheck
+```
+
+Instrumented trust-manager tests require a device/emulator and network access.
+CI builds, lints, runs JVM tests where present, and compiles instrumentation;
+it does not execute device tests. Dependabot and scheduled CI run weekly.
 
 ## Contact
 
